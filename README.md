@@ -1,22 +1,22 @@
 # Real-Time Chat and Collaboration Platform
 
-A scalable, real-time messaging application inspired by Slack, built with Node.js, Express.js, Socket.IO, MongoDB, and Redis. The platform enables users to communicate through private conversations and group chats with real-time messaging, online presence, typing indicators, read receipts, and secure file sharing.
+A scalable real-time messaging application inspired by Slack, built using Node.js, Express.js, Socket.IO, PostgreSQL, Prisma, and Redis. The platform supports private messaging, group conversations, online presence, typing indicators, read receipts, and secure file sharing.
 
 ## 🚀 Features
 
-- **Authentication & Authorization** — Secure registration, login, JWT authentication, and role-based access control.
-- **One-to-One Messaging** — Send and receive private messages instantly.
-- **Group Chats & Channels** — Create groups, manage members, and control access.
-- **Real-Time Communication** — Use Socket.IO for instant messaging and live updates.
-- **Online Presence** — Track online/offline status and last-seen information.
-- **Typing Indicators** — See when another user is typing.
-- **Read Receipts** — Track message delivery and read status.
-- **File Sharing** — Share images and documents securely.
-- **Message Search** — Search messages with filters and pagination.
-- **Redis Integration** — Support real-time communication across multiple server instances.
-- **Notifications** — Notify users about messages and relevant activity.
-- **API Documentation** — Document REST APIs using Swagger/OpenAPI.
-- **Testing & Deployment** — Automated tests, Docker support, and CI/CD.
+- **Authentication:** JWT-based authentication and secure password hashing.
+- **Private Messaging:** Real-time one-to-one conversations.
+- **Group Chats:** Create groups, manage members, and control permissions.
+- **Real-Time Communication:** Instant messaging using Socket.IO.
+- **Online Presence:** Online/offline status and last-seen information.
+- **Typing Indicators:** Real-time typing status.
+- **Read Receipts:** Track message delivery and read status.
+- **File Sharing:** Upload and share images and documents.
+- **Message Search:** Search messages with filters and pagination.
+- **Redis Integration:** Cross-instance Socket.IO broadcasting and temporary presence data.
+- **PostgreSQL Database:** Relational data storage with transactions and indexing.
+- **API Documentation:** REST API documentation using Swagger/OpenAPI.
+- **Testing and Deployment:** Automated tests, Docker, and CI/CD.
 
 ## 🛠️ Tech Stack
 
@@ -24,10 +24,10 @@ A scalable, real-time messaging application inspired by Slack, built with Node.j
 |---|---|
 | Node.js | JavaScript runtime |
 | Express.js | REST API framework |
-| Socket.IO | Real-time bidirectional communication |
-| Postgres| Persistent database |
-| Postgres |
-| Redis | Socket scaling, caching, and temporary presence |
+| Socket.IO | Real-time communication |
+| PostgreSQL | Relational database |
+| Prisma ORM | Database access and migrations |
+| Redis | Caching, rate limiting, and Socket.IO scaling |
 | JWT | Authentication |
 | bcrypt | Password hashing |
 | Zod / Joi | Request validation |
@@ -40,34 +40,25 @@ A scalable, real-time messaging application inspired by Slack, built with Node.j
 
 ```mermaid
 flowchart TD
-    A[Web or Mobile Client] --> B[Express REST API]
+    A[Web or Mobile Client] <--> B[Express REST API]
     A <--> C[Socket.IO Server]
     B --> D[Authentication and Authorization]
     C --> D
-    B --> E[(MongoDB)]
+    B --> E[Prisma ORM]
     C --> E
-    C <--> F[(Redis)]
-    F <--> G[Other Socket.IO Instances]
-    B --> H[Object Storage]
-    B --> I[Background Jobs]
+    E --> F[(PostgreSQL)]
+    C <--> G[(Redis)]
+    G <--> H[Other Socket.IO Instances]
+    B --> I[Object Storage]
 ```
-
-### How It Works
-
-1. Users authenticate through the REST API.
-2. The server verifies credentials and issues authentication tokens.
-3. Clients establish authenticated Socket.IO connections.
-4. Messages are authorized and persisted in MongoDB.
-5. Socket.IO broadcasts message events to authorized recipients.
-6. Redis enables event broadcasting between multiple server instances.
-7. Clients reconnecting after network interruptions synchronize missed messages from persistent storage.
-
-**Important:** MongoDB stores permanent messages. Redis supports temporary state and cross-instance communication; it is not the permanent source of truth for messages.
 
 ## 📁 Project Structure
 
 ```text
 real-time-chat/
+├── prisma/
+│   ├── schema.prisma
+│   └── migrations/
 ├── src/
 │   ├── config/
 │   ├── modules/
@@ -75,7 +66,6 @@ real-time-chat/
 │   │   ├── users/
 │   │   ├── conversations/
 │   │   ├── messages/
-│   │   ├── channels/
 │   │   ├── attachments/
 │   │   └── notifications/
 │   ├── sockets/
@@ -85,13 +75,10 @@ real-time-chat/
 │   ├── services/
 │   ├── repositories/
 │   ├── validators/
-│   ├── jobs/
 │   ├── utils/
 │   ├── app.js
 │   └── server.js
 ├── tests/
-├── .github/
-│   └── workflows/
 ├── .env.example
 ├── .gitignore
 ├── Dockerfile
@@ -100,21 +87,15 @@ real-time-chat/
 └── README.md
 ```
 
-*The structure may evolve as development progresses.*
-
 ## ⚙️ Getting Started
 
 ### Prerequisites
 
-Install the following tools:
-
 - Node.js 20 or later
 - npm
-- MongoDB
+- PostgreSQL
 - Redis
 - Git
-
-Alternatively, use Docker Compose for local database and Redis services.
 
 ### 1. Clone the Repository
 
@@ -123,226 +104,203 @@ git clone <YOUR_GITHUB_REPOSITORY_URL>
 cd real-time-chat
 ```
 
-Replace the placeholder with your actual GitHub repository URL.
-
 ### 2. Install Dependencies
 
 ```bash
 npm install
 ```
 
+Install Prisma if it is not already configured:
+
+```bash
+npm install @prisma/client
+npm install -D prisma
+```
+
 ### 3. Configure Environment Variables
 
-Create a `.env` file in the project root using `.env.example` as a template.
-
-Example:
+Create a `.env` file in the project root.
 
 ```env
 NODE_ENV=development
 PORT=5000
 
-MONGODB_URI=mongodb://localhost:27017/realtime_chat
-REDIS_URL=redis://localhost:6379
+DATABASE_URL="postgresql://postgres:your_password@localhost:5432/realtime_chat?schema=public"
 
-JWT_ACCESS_SECRET=replace_with_a_secure_random_secret
-JWT_REFRESH_SECRET=replace_with_another_secure_random_secret
+REDIS_URL="redis://localhost:6379"
 
-CLIENT_URL=http://localhost:3000
+JWT_ACCESS_SECRET="replace_with_a_secure_random_secret"
+JWT_REFRESH_SECRET="replace_with_another_secure_random_secret"
 
-# Configure file storage credentials when needed
-CLOUDINARY_CLOUD_NAME=
-CLOUDINARY_API_KEY=
-CLOUDINARY_API_SECRET=
+CLIENT_URL="http://localhost:3000"
 ```
 
-Generate strong secrets for local development. Never commit `.env` or production credentials to GitHub.
+Replace the database username, password, and connection details with your local PostgreSQL configuration.
 
-### 4. Start MongoDB and Redis
+Never commit `.env` or production credentials to GitHub.
 
-If MongoDB and Redis are installed locally, start both services.
+### 4. Set Up the Database
 
-If Docker Compose is configured:
+Create a PostgreSQL database named `realtime_chat`, then run:
 
 ```bash
-docker compose up -d
+npx prisma generate
+npx prisma migrate dev --name init
 ```
 
-### 5. Start the Application
+The migration command creates the database tables from your `prisma/schema.prisma` file. Ensure the schema is configured before running migrations.
 
-Use the scripts defined in your `package.json`. For example, if these scripts are configured:
+### 5. Start Redis
+
+If Redis is installed locally, start its service. Alternatively, configure it through Docker Compose.
+
+```bash
+docker compose up -d redis
+```
+
+This command assumes your `docker-compose.yml` contains a service named `redis`.
+
+### 6. Start the Application
+
+Run the development command configured in your `package.json`:
 
 ```bash
 npm run dev
 ```
 
-For production:
-
-```bash
-npm start
-```
-
-The API will be available at:
+Example local API address:
 
 ```text
 http://localhost:5000
 ```
 
-The actual port, scripts, and endpoints depend on your implementation.
+## 🗄️ Database Design
 
-## 🔌 API Endpoints
+PostgreSQL stores the application's persistent relational data.
 
-The following are planned endpoint examples.
+| Table | Purpose |
+|---|---|
+| `users` | User profiles and authentication details |
+| `conversations` | Private and group conversations |
+| `conversation_members` | Users belonging to each conversation |
+| `messages` | Persistent messages and timestamps |
+| `attachments` | File metadata and storage references |
+| `refresh_tokens` | Refresh-token or session records |
+| `notifications` | User notification records |
+| `message_reads` | Message read receipts, if modeled separately |
+
+Use foreign keys, appropriate unique constraints, and indexes to preserve data integrity and improve query performance.
+
+### Important Database Considerations
+
+- Use transactions for operations that require multiple related database changes.
+- Add indexes for conversation membership and message history queries.
+- Use cursor-based pagination for conversations with large message histories.
+- Enforce membership permissions before returning private messages.
+- Store uploaded files in object storage rather than directly in PostgreSQL.
+- Use Redis for temporary state and cross-instance broadcasting, not as the permanent source of truth for messages.
+
+## 🔌 REST API Endpoints
+
+These are planned endpoint examples.
 
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/v1/auth/register` | Register a user |
-| POST | `/api/v1/auth/login` | Log in |
+| POST | `/api/v1/auth/login` | Authenticate a user |
 | POST | `/api/v1/auth/refresh` | Refresh authentication tokens |
 | POST | `/api/v1/auth/logout` | Log out |
 | GET | `/api/v1/users/me` | Get current user |
-| PATCH | `/api/v1/users/me` | Update user profile |
+| PATCH | `/api/v1/users/me` | Update profile |
 | POST | `/api/v1/conversations` | Create a conversation |
 | GET | `/api/v1/conversations` | List conversations |
-| GET | `/api/v1/conversations/:id/messages` | Retrieve conversation messages |
+| GET | `/api/v1/conversations/:id/messages` | Retrieve messages |
 | POST | `/api/v1/conversations/:id/messages` | Send a message |
 | PATCH | `/api/v1/messages/:id` | Edit a message |
 | DELETE | `/api/v1/messages/:id` | Delete a message |
 | GET | `/api/v1/search/messages?q=hello` | Search messages |
 
-These endpoints are examples, not a claim that all routes are already implemented.
+Actual endpoints depend on your implementation.
 
 ## ⚡ Socket.IO Events
 
-### Client-to-Server Events
+### Client-to-Server
 
-| Event | Description |
-|---|---|
-| `message:send` | Send a message |
-| `message:read` | Mark messages as read |
-| `typing:start` | Notify others that typing has started |
-| `typing:stop` | Notify others that typing has stopped |
-| `conversation:join` | Join an authorized conversation room |
-| `conversation:leave` | Leave a conversation room |
+- `message:send`
+- `message:read`
+- `typing:start`
+- `typing:stop`
+- `conversation:join`
+- `conversation:leave`
 
-### Server-to-Client Events
+### Server-to-Client
 
-| Event | Description |
-|---|---|
-| `message:new` | Receive a new message |
-| `message:delivered` | Receive a delivery acknowledgment |
-| `message:read` | Receive a read receipt |
-| `typing:update` | Receive typing status updates |
-| `presence:update` | Receive online/offline status updates |
-| `notification:new` | Receive a notification |
+- `message:new`
+- `message:delivered`
+- `message:read`
+- `typing:update`
+- `presence:update`
+- `notification:new`
 
-All event names and payloads should remain consistent between the client and server. The server must verify authentication and conversation permissions before processing events.
+Validate and authorize every event on the server. Persist messages before acknowledging them as successfully stored, and implement reconnection synchronization from PostgreSQL.
 
 ## 🧪 Testing
 
-Run the commands configured in your project scripts. A typical setup might use:
+Run the scripts configured in `package.json`. For example:
 
 ```bash
 npm test
 ```
 
-Test coverage should include:
+Test authentication, authorization, message persistence, Socket.IO delivery, conversation permissions, duplicate-event handling, Redis scaling, and database failure scenarios.
 
-- Authentication and authorization.
-- Message creation and persistence.
-- Private conversation access.
-- Group membership permissions.
-- Socket.IO message delivery.
-- Read receipts and typing indicators.
-- Duplicate-message prevention.
-- Redis adapter behavior across server instances.
-- Input validation and rate limiting.
-- File upload security.
+## 🐳 Docker and Deployment
 
-## 🔐 Security
+Use Docker Compose for local development with PostgreSQL and Redis. For production, configure managed PostgreSQL and Redis services, secure environment variables, health checks, logging, and WebSocket-compatible hosting.
 
-- Hash passwords using bcrypt.
-- Validate all incoming requests and socket payloads.
-- Verify JWTs and enforce token expiration.
-- Apply authorization checks to every private conversation.
-- Rate-limit authentication and messaging endpoints.
-- Validate file types, sizes, and access permissions.
-- Configure CORS and secure HTTP headers.
-- Keep secrets in environment variables.
-- Use structured logging without exposing sensitive information.
+Before deployment:
 
-## 📈 Scalability and Reliability
-
-The architecture is designed to support future scaling through:
-
-- Horizontal scaling of Node.js instances.
-- Redis adapter for cross-instance Socket.IO events.
-- Indexed database queries and cursor-based pagination.
-- Temporary presence data with expiration.
-- Reconnection handling and message history synchronization.
-- Background jobs for asynchronous notifications.
-- Health checks, logging, and automated tests.
-
-Delivery guarantees, retry behavior, and message synchronization must be implemented and tested explicitly.
-
-## 🚢 Deployment
-
-The application can be deployed using Docker and a hosting provider that supports persistent connections and WebSockets.
-
-Typical deployment requirements include:
-
-1. Configure production environment variables.
-2. Provision managed MongoDB and Redis services.
-3. Deploy the Node.js application.
-4. Configure the frontend origin and CORS.
-5. Verify WebSocket connectivity.
-6. Configure health checks and application logs.
-7. Run automated tests before releasing changes.
+1. Configure the production `DATABASE_URL` and `REDIS_URL`.
+2. Run Prisma migrations using the deployment process.
+3. Configure allowed frontend origins.
+4. Verify Socket.IO connectivity.
+5. Run automated tests.
+6. Configure graceful shutdown and health checks.
 
 ## 🗺️ Development Roadmap
 
-- [ ] Project setup and architecture
+- [ ] Project setup and PostgreSQL configuration
+- [ ] Prisma schema and database migrations
 - [ ] Authentication and user profiles
-- [ ] Private conversations
-- [ ] Group chats and channels
-- [ ] Persistent messaging
-- [ ] Socket.IO integration
-- [ ] Typing indicators and online presence
-- [ ] Message delivery and read receipts
+- [ ] Private conversations and group chats
+- [ ] Message persistence and REST APIs
+- [ ] Socket.IO real-time messaging
+- [ ] Online presence and typing indicators
+- [ ] Delivery acknowledgments and read receipts
 - [ ] Redis adapter and multi-instance testing
 - [ ] File sharing and message search
 - [ ] Notifications
-- [ ] Automated tests
-- [ ] Docker and CI/CD
-- [ ] Production deployment
+- [ ] Automated tests and security hardening
+- [ ] Docker, CI/CD, and deployment
 
 ## 🎯 Learning Outcomes
 
 This project demonstrates practical knowledge of:
 
-- REST API development with Express.js.
+- Backend development with Node.js and Express.
 - Real-time communication using Socket.IO.
-- Database modeling and query optimization.
+- PostgreSQL database design and SQL optimization.
+- Prisma ORM and database migrations.
 - Authentication and authorization.
-- Redis and horizontal scaling.
-- Distributed-system reliability concepts.
-- Automated testing and deployment.
-- Backend architecture and system design.
-
-## 🤝 Contributing
-
-Contributions, suggestions, and bug reports are welcome.
-
-1. Fork the repository.
-2. Create a feature branch.
-3. Commit your changes.
-4. Open a pull request with a clear description.
+- Redis and horizontally scaled WebSocket applications.
+- Testing, deployment, and system design.
 
 ## 📄 License
 
-Choose a license appropriate for your project, such as the MIT License, and add the corresponding `LICENSE` file if you want to distribute the code under that license.
+Add a `LICENSE` file if you intend to distribute this project under an open-source license.
 
 ---
 
-**Status:** In development
+**Project Status:** In Development
 
-Built to explore real-time systems, scalable backend architecture, and production-oriented engineering practices.
+Built to explore real-time communication, relational database design, scalable backend architecture, and production-oriented engineering practices.
