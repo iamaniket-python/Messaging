@@ -116,7 +116,10 @@ export async function deleteMessage({ messageId, userId }) {
     throw AppError.forbidden('You cannot delete this message', 'NOT_ALLOWED_TO_DELETE');
   }
 
-  if (message.deleted_at) return;
+  if (message.deleted_at) {
+    return { conversationId: message.conversation_id, alreadyDeleted: true };
+  }
 
   await query("UPDATE messages SET deleted_at = now(), content = '' WHERE id = $1", [messageId]);
+  return { conversationId: message.conversation_id, alreadyDeleted: false };
 }

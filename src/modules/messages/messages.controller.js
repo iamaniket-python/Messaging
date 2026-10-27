@@ -1,5 +1,6 @@
 import * as service from './messages.service.js';
 import { toMessage } from './message.mapper.js';
+import { broadcastNewMessage, emitToConversation } from '../../sockets/realtime.js';
 
 export async function list(req, res) {
   const { conversationId } = req.validated.params;
@@ -29,6 +30,9 @@ export async function send(req, res) {
     content: req.validated.body.content,
     clientMessageId: req.validated.body.clientMessageId,
   });
+
+  if (!duplicate) broadcastNewMessage(message);
+
   res.status(duplicate ? 200 : 201).json({ success: true, data: { message: toMessage(message) } });
 }
 
@@ -38,10 +42,22 @@ export async function edit(req, res) {
     userId: req.user.id,
     content: req.validated.body.content,
   });
+
+  emitToConversation(message.conversation_id, 'message:updated', { message: toMessage(message) });
+
   res.json({ success: true, data: { message: toMessage(message) } });
 }
 
 export async function remove(req, res) {
-  await service.deleteMessage({ messageId: req.validated.params.messageId, userId: req.user.id });
+  const { messageId } = req.validated.params;
+  const { conversationId, alreadyDeleted } = await service.deleteMessage({
+    messageId,
+    userId: req.user.id,
+  });
+
+  if (!alreadyDeleted) {
+    emitToConversation(conversationId, 'message:deleted', { conversationId, messageId });
+  }
+
   res.status(204).end();
 }
