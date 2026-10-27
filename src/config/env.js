@@ -25,6 +25,10 @@ const envSchema = z.object({
   ACCESS_TOKEN_TTL_MIN: z.coerce.number().int().positive().default(15),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
   BCRYPT_ROUNDS: z.coerce.number().int().min(4).max(15).default(12),
+
+  // Realtime
+  PRESENCE_OFFLINE_GRACE_MS: z.coerce.number().int().min(0).default(5000),
+  TYPING_TTL_MS: z.coerce.number().int().positive().default(5000),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -1,5 +1,5 @@
 import { getIO } from './io.js';
-import { userRoom, conversationRoom } from './rooms.js';
+import { userRoom, conversationRoom, presenceRoom } from './rooms.js';
 import { logger } from '../utils/logger.js';
 import { toMessage } from '../modules/messages/message.mapper.js';
 
@@ -7,25 +7,28 @@ function safely(label, fn) {
   try {
     fn();
   } catch (err) {
-    logger.error({ err, label }, 'Realtime emit failed');
+    logger.error({ err, label }, 'Realtime operation failed');
   }
 }
 
-export function emitToConversation(conversationId, event, payload, { exceptSocketId } = {}) {
+function emitToRoom(room, event, payload, exceptSocketId) {
   safely(event, () => {
     const io = getIO();
     if (!io) return;
-    let target = io.to(conversationRoom(conversationId));
+    let target = io.to(room);
     if (exceptSocketId) target = target.except(exceptSocketId);
     target.emit(event, payload);
   });
 }
 
-export function emitToUser(userId, event, payload) {
-  safely(event, () => {
-    getIO()?.to(userRoom(userId)).emit(event, payload);
-  });
-}
+export const emitToConversation = (conversationId, event, payload, { exceptSocketId } = {}) =>
+  emitToRoom(conversationRoom(conversationId), event, payload, exceptSocketId);
+
+export const emitToUser = (userId, event, payload, { exceptSocketId } = {}) =>
+  emitToRoom(userRoom(userId), event, payload, exceptSocketId);
+
+export const emitToPresence = (userId, event, payload) =>
+  emitToRoom(presenceRoom(userId), event, payload);
 
 export function joinConversationRoom(userId, conversationId) {
   safely('joinConversationRoom', () => {
@@ -41,4 +44,16 @@ export function leaveConversationRoom(userId, conversationId) {
 
 export function broadcastNewMessage(messageRow, options = {}) {
   emitToConversation(messageRow.conversation_id, 'message:new', { message: toMessage(messageRow) }, options);
+}
+
+// event: 'message:delivered' | 'message:read'
+export function broadcastReceipt(event, { conversationId, userId, messageId, conversationType }, options = {}) {
+  const payload = { conversationId, userId, messageId };
+
+  if (conversationType === 'channel') {
+    if (event === 'message:read') emitToUser(userId, event, payload, options);
+    return;
+  }
+
+  emitToConversation(conversationId, event, payload, options);
 }

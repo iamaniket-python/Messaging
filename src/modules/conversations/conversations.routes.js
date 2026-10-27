@@ -36,6 +36,7 @@ router.post(
   validate({ params: conversationIdParamsSchema, body: markReadSchema }),
   controller.markRead
 );
+router.get('/:conversationId/receipts', validate({ params: conversationIdParamsSchema }), controller.getReceipts);
 
 router.post(
   '/:conversationId/members',

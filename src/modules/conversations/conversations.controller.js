@@ -1,10 +1,12 @@
 import * as service from './conversations.service.js';
+import * as receiptsService from './receipts.service.js';
 import { toConversation, toMember, toInboxItem, toPublicChannel } from './conversation.mapper.js';
 import {
   emitToConversation,
   emitToUser,
   joinConversationRoom,
   leaveConversationRoom,
+  broadcastReceipt,
 } from '../../sockets/realtime.js';
 
 export async function create(req, res) {
@@ -91,12 +93,33 @@ export async function leave(req, res) {
 }
 
 export async function markRead(req, res) {
-  const lastReadMessageId = await service.markRead(
-    req.validated.params.conversationId,
-    req.user.id,
-    req.validated.body.messageId
-  );
-  res.json({ success: true, data: { lastReadMessageId } });
+  const { conversationId } = req.validated.params;
+  const result = await receiptsService.markRead(conversationId, req.user.id, req.validated.body.messageId);
+
+  if (result.advanced) {
+    broadcastReceipt('message:read', {
+      conversationId,
+      userId: req.user.id,
+      messageId: result.messageId,
+      conversationType: result.conversationType,
+    });
+  }
+
+  res.json({ success: true, data: { lastReadMessageId: result.messageId } });
+}
+
+export async function getReceipts(req, res) {
+  const rows = await receiptsService.getReceipts(req.validated.params.conversationId, req.user.id);
+  res.json({
+    success: true,
+    data: {
+      receipts: rows.map((row) => ({
+        userId: row.user_id,
+        lastDeliveredMessageId: row.last_delivered_message_id,
+        lastReadMessageId: row.last_read_message_id,
+      })),
+    },
+  });
 }
 
 export async function addMembers(req, res) {
