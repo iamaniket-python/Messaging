@@ -1,9 +1,9 @@
 ﻿import { Router } from 'express';
 import { checkDb } from '../../config/db.js';
+import { checkRedis, isRedisEnabled } from '../../config/redis.js';
 
 const router = Router();
 
-// Liveness: process zinda hai? (load balancer / Docker yahi check karta hai)
 router.get('/health', (_req, res) => {
   res.status(200).json({
     success: true,
@@ -15,21 +15,33 @@ router.get('/health', (_req, res) => {
   });
 });
 
-// Readiness: dependencies (DB) ready hain? Nahi to traffic mat bhejo
 router.get('/ready', async (req, res) => {
+  const checks = { database: 'up' };
+  let ready = true;
+
   try {
     await checkDb();
-    res.status(200).json({
-      success: true,
-      data: { status: 'ready', checks: { database: 'up' } },
-    });
   } catch (err) {
-    req.log.error({ err }, 'Readiness check failed');
-    res.status(503).json({
-      success: false,
-      data: { status: 'not_ready', checks: { database: 'down' } },
-    });
+    req.log.error({ err }, 'Database readiness check failed');
+    checks.database = 'down';
+    ready = false;
   }
+
+  if (isRedisEnabled) {
+    try {
+      await checkRedis();
+      checks.redis = 'up';
+    } catch (err) {
+      req.log.error({ err }, 'Redis readiness check failed');
+      checks.redis = 'down';
+      ready = false;
+    }
+  }
+
+  res.status(ready ? 200 : 503).json({
+    success: ready,
+    data: { status: ready ? 'ready' : 'not_ready', checks },
+  });
 });
 
 export default router;

@@ -7,5 +7,11 @@ process.env.JWT_ACCESS_SECRET = 'test-secret-test-secret-test-secret-123456';
 process.env.CORS_ORIGINS = 'http://localhost:5173';
 process.env.PRESENCE_OFFLINE_GRACE_MS = '200';
 process.env.TYPING_TTL_MS = '300';
+process.env.PRESENCE_SOCKET_TTL_MS = '2500';
+process.env.PRESENCE_HEARTBEAT_MS = '500';
+process.env.PRESENCE_SWEEP_INTERVAL_MS = '500';
+
+// Redis sirf tests/redis-cluster.test.js mein enable hota hai
+process.env.REDIS_URL = '';
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://test:test@localhost:5433/test';

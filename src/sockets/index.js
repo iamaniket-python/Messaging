@@ -1,5 +1,7 @@
 import { Server } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
 import { env } from '../config/env.js';
+import { isRedisEnabled, createRedisConnection } from '../config/redis.js';
 import { logger } from '../utils/logger.js';
 import { setIO } from './io.js';
 import { socketAuth } from './middleware/auth.js';
@@ -12,6 +14,15 @@ export function initSocket(httpServer) {
     pingInterval: 25_000,
     pingTimeout: 20_000,
   });
+
+  if (isRedisEnabled) {
+    const pubClient = createRedisConnection();
+    const subClient = createRedisConnection();
+    io.adapter(createAdapter(pubClient, subClient));
+    logger.info('Socket.IO Redis adapter enabled');
+  } else {
+    logger.warn('REDIS_URL not set: Socket.IO running single-instance (in-memory adapter)');
+  }
 
   io.use(socketAuth);
 

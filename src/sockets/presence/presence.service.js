@@ -5,49 +5,102 @@ import { emitToPresence } from '../realtime.js';
 import { logger } from '../../utils/logger.js';
 
 const offlineTimers = new Map();
+const localSockets = new Map();
+let heartbeatTimer = null;
+let sweepTimer = null;
+
+async function safely(label, fn, fallback) {
+  try {
+    return await fn();
+  } catch (err) {
+    logger.error({ err, label }, 'Presence operation failed');
+    return fallback;
+  }
+}
+
+async function markOffline(userId) {
+  const claimed = await presenceStore.claimOffline(userId);
+  if (!claimed) return;
+
+  const { rows } = await query('UPDATE users SET last_seen_at = now() WHERE id = $1 RETURNING last_seen_at', [
+    userId,
+  ]);
+
+  emitToPresence(userId, 'presence:update', {
+    userId,
+    status: 'offline',
+    lastSeenAt: rows[0]?.last_seen_at ?? null,
+  });
+}
+
+function startBackgroundTasks() {
+  if (!heartbeatTimer) {
+    heartbeatTimer = setInterval(() => {
+      const entries = [...localSockets].map(([socketId, userId]) => ({ userId, socketId }));
+      safely('heartbeat', () => presenceStore.touchMany(entries));
+    }, env.PRESENCE_HEARTBEAT_MS);
+    heartbeatTimer.unref();
+  }
+
+  if (!sweepTimer) {
+    sweepTimer = setInterval(() => {
+      safely('sweep', async () => {
+        for (const userId of await presenceStore.findStaleOnlineUsers()) {
+          await markOffline(userId);
+        }
+      });
+    }, env.PRESENCE_SWEEP_INTERVAL_MS);
+    sweepTimer.unref();
+  }
+}
+
+export function stopPresenceTasks() {
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  if (sweepTimer) clearInterval(sweepTimer);
+  heartbeatTimer = null;
+  sweepTimer = null;
+}
 
 export async function userConnected(userId, socketId) {
+  startBackgroundTasks();
+  localSockets.set(socketId, userId);
+
   const pending = offlineTimers.get(userId);
   if (pending) {
     clearTimeout(pending);
     offlineTimers.delete(userId);
   }
 
-  const count = await presenceStore.add(userId, socketId);
-
-  if (count === 1 && !pending) {
-    emitToPresence(userId, 'presence:update', { userId, status: 'online', lastSeenAt: null });
-  }
+  await safely('connect', async () => {
+    await presenceStore.add(userId, socketId);
+    if (await presenceStore.markOnline(userId)) {
+      emitToPresence(userId, 'presence:update', { userId, status: 'online', lastSeenAt: null });
+    }
+  });
 }
 
 export async function userDisconnected(userId, socketId) {
-  const count = await presenceStore.remove(userId, socketId);
-  if (count > 0) return;
+  localSockets.delete(socketId);
 
-  const existing = offlineTimers.get(userId);
-  if (existing) clearTimeout(existing);
+  await safely('disconnect', async () => {
+    await presenceStore.setGrace(userId, env.PRESENCE_OFFLINE_GRACE_MS + 5000);
+    const live = await presenceStore.remove(userId, socketId);
+    if (live > 0) return;
 
-  const timer = setTimeout(async () => {
-    offlineTimers.delete(userId);
-    try {
-      if ((await presenceStore.count(userId)) > 0) return;
+    const existing = offlineTimers.get(userId);
+    if (existing) clearTimeout(existing);
 
-      const { rows } = await query(
-        'UPDATE users SET last_seen_at = now() WHERE id = $1 RETURNING last_seen_at',
-        [userId]
-      );
-      emitToPresence(userId, 'presence:update', {
-        userId,
-        status: 'offline',
-        lastSeenAt: rows[0]?.last_seen_at ?? null,
+    const timer = setTimeout(() => {
+      offlineTimers.delete(userId);
+      safely('offline', async () => {
+        if ((await presenceStore.count(userId)) > 0) return;
+        await markOffline(userId);
       });
-    } catch (err) {
-      logger.error({ err, userId }, 'Failed to mark user offline');
-    }
-  }, env.PRESENCE_OFFLINE_GRACE_MS);
+    }, env.PRESENCE_OFFLINE_GRACE_MS);
 
-  timer.unref();
-  offlineTimers.set(userId, timer);
+    timer.unref();
+    offlineTimers.set(userId, timer);
+  });
 }
 
 export async function filterVisibleUsers(requesterId, userIds) {
@@ -65,10 +118,8 @@ export async function filterVisibleUsers(requesterId, userIds) {
 export async function getStatuses(userIds) {
   if (userIds.length === 0) return {};
 
-  const online = await presenceStore.onlineUserIds(userIds);
-  const isOnline = (id) => online.has(id) || offlineTimers.has(id);
-
-  const offlineIds = userIds.filter((id) => !isOnline(id));
+  const online = await safely('statuses', () => presenceStore.onlineUserIds(userIds), new Set());
+  const offlineIds = userIds.filter((id) => !online.has(id));
   const lastSeen = new Map();
 
   if (offlineIds.length > 0) {
@@ -79,7 +130,7 @@ export async function getStatuses(userIds) {
   return Object.fromEntries(
     userIds.map((id) => [
       id,
-      isOnline(id)
+      online.has(id)
         ? { status: 'online', lastSeenAt: null }
         : { status: 'offline', lastSeenAt: lastSeen.get(id) ?? null },
     ])

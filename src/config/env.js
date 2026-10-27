@@ -29,6 +29,16 @@ const envSchema = z.object({
   // Realtime
   PRESENCE_OFFLINE_GRACE_MS: z.coerce.number().int().min(0).default(5000),
   TYPING_TTL_MS: z.coerce.number().int().positive().default(5000),
+
+  // Redis (optional: khali ho to in-memory fallback)
+  REDIS_URL: z
+    .string()
+    .optional()
+    .transform((value) => (value && value.trim() ? value.trim() : undefined)),
+  PRESENCE_SOCKET_TTL_MS: z.coerce.number().int().positive().default(60000),
+  PRESENCE_HEARTBEAT_MS: z.coerce.number().int().positive().default(20000),
+  PRESENCE_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(30000),
+  SOCKET_MESSAGE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(120),
 });
 
 const parsed = envSchema.safeParse(process.env);
