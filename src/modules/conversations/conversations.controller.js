@@ -1,8 +1,29 @@
 import * as service from './conversations.service.js';
 import { toConversation, toMember, toInboxItem, toPublicChannel } from './conversation.mapper.js';
+import {
+  emitToConversation,
+  emitToUser,
+  joinConversationRoom,
+  leaveConversationRoom,
+} from '../../sockets/realtime.js';
 
 export async function create(req, res) {
-  const { conversation, created } = await service.createConversation(req.user.id, req.validated.body);
+  const body = req.validated.body;
+  const { conversation, created } = await service.createConversation(req.user.id, body);
+
+  if (created) {
+    const memberIds =
+      body.type === 'dm'
+        ? [req.user.id, body.userId.toLowerCase()]
+        : [...new Set([req.user.id, ...body.memberIds.map((id) => id.toLowerCase())])];
+
+    const payload = { conversation: toConversation(conversation) };
+    for (const memberId of memberIds) {
+      joinConversationRoom(memberId, conversation.id);
+      emitToUser(memberId, 'conversation:new', payload);
+    }
+  }
+
   res.status(created ? 201 : 200).json({ success: true, data: { conversation: toConversation(conversation) } });
 }
 
@@ -32,21 +53,40 @@ export async function getOne(req, res) {
 }
 
 export async function update(req, res) {
-  const conversation = await service.updateConversation(
-    req.validated.params.conversationId,
-    req.user.id,
-    req.validated.body
-  );
+  const { conversationId } = req.validated.params;
+  const conversation = await service.updateConversation(conversationId, req.user.id, req.validated.body);
+
+  emitToConversation(conversationId, 'conversation:updated', { conversation: toConversation(conversation) });
+
   res.json({ success: true, data: { conversation: toConversation(conversation) } });
 }
 
 export async function join(req, res) {
-  const result = await service.joinChannel(req.validated.params.conversationId, req.user.id);
+  const { conversationId } = req.validated.params;
+  const result = await service.joinChannel(conversationId, req.user.id);
+
+  if (result.joined) {
+    joinConversationRoom(req.user.id, conversationId);
+    emitToConversation(conversationId, 'conversation:member_added', {
+      conversationId,
+      userIds: [req.user.id],
+    });
+  }
+
   res.json({ success: true, data: result });
 }
 
 export async function leave(req, res) {
-  await service.leaveConversation(req.validated.params.conversationId, req.user.id);
+  const { conversationId } = req.validated.params;
+  await service.leaveConversation(conversationId, req.user.id);
+
+  emitToConversation(conversationId, 'conversation:member_removed', {
+    conversationId,
+    userId: req.user.id,
+    reason: 'left',
+  });
+  leaveConversationRoom(req.user.id, conversationId);
+
   res.status(204).end();
 }
 
@@ -60,22 +100,51 @@ export async function markRead(req, res) {
 }
 
 export async function addMembers(req, res) {
-  const result = await service.addMembers(
-    req.validated.params.conversationId,
-    req.user.id,
-    req.validated.body.userIds
-  );
+  const { conversationId } = req.validated.params;
+  const result = await service.addMembers(conversationId, req.user.id, req.validated.body.userIds);
+
+  if (result.addedUserIds.length > 0) {
+    const { conversation } = await service.getConversation(conversationId, req.user.id);
+    const payload = { conversation: toConversation(conversation) };
+
+    for (const userId of result.addedUserIds) {
+      joinConversationRoom(userId, conversationId);
+      emitToUser(userId, 'conversation:new', payload);
+    }
+    emitToConversation(conversationId, 'conversation:member_added', {
+      conversationId,
+      userIds: result.addedUserIds,
+    });
+  }
+
   res.json({ success: true, data: result });
 }
 
 export async function removeMember(req, res) {
   const { conversationId, userId } = req.validated.params;
-  await service.removeMember(conversationId, req.user.id, userId);
+  const targetId = userId.toLowerCase();
+
+  await service.removeMember(conversationId, req.user.id, targetId);
+
+  emitToConversation(conversationId, 'conversation:member_removed', {
+    conversationId,
+    userId: targetId,
+    reason: 'removed',
+  });
+  leaveConversationRoom(targetId, conversationId);
+
   res.status(204).end();
 }
 
 export async function updateMemberRole(req, res) {
   const { conversationId, userId } = req.validated.params;
   const member = await service.updateMemberRole(conversationId, req.user.id, userId, req.validated.body.role);
+
+  emitToConversation(conversationId, 'conversation:member_role_changed', {
+    conversationId,
+    userId: member.user_id,
+    role: member.role,
+  });
+
   res.json({ success: true, data: { member: { userId: member.user_id, role: member.role } } });
 }

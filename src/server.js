@@ -3,9 +3,10 @@ import app from './app.js';
 import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
 import { checkDb, closeDb } from './config/db.js';
+import { initSocket } from './sockets/index.js';
 
-// Express app ko http server mein wrap kiya, taaki Phase 5 mein Socket.IO isi server par attach ho sake
 const server = http.createServer(app);
+const io = initSocket(server);
 
 let shuttingDown = false;
 
@@ -14,14 +15,13 @@ async function shutdown(signal, exitCode = 0) {
   shuttingDown = true;
   logger.info({ signal }, 'Shutting down gracefully');
 
-  // 10s mein shutdown na ho paaye to force exit
   const forceExit = setTimeout(() => {
     logger.error('Forced shutdown after timeout');
     process.exit(1);
   }, 10_000);
   forceExit.unref();
 
-  server.close(async () => {
+  io.close(async () => {
     try {
       await closeDb();
       logger.info('Shutdown complete');
@@ -36,7 +36,7 @@ async function shutdown(signal, exitCode = 0) {
 
 async function start() {
   try {
-    await checkDb(); // DB down ho to fail-fast
+    await checkDb();
     server.listen(env.PORT, () => {
       logger.info(`Server running on port ${env.PORT} (${env.NODE_ENV})`);
     });
