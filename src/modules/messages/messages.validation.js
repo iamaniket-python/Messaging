@@ -3,27 +3,15 @@ import { uuidSchema, bigintIdSchema, limitSchema } from '../../validators/common
 
 const contentSchema = z.string().trim().min(1, 'Message cannot be empty').max(4000);
 
-// File message mein content khali ho sakta hai
-const optionalContentSchema = z.string().trim().max(4000).default('');
-
-const attachmentIdsSchema = z
-  .array(uuidSchema)
-  .max(5, 'At most 5 attachments per message')
-  .optional();
-
 export const messageIdParamsSchema = z.object({ messageId: bigintIdSchema });
 
 export const sendMessageSchema = z
   .object({
-    content: optionalContentSchema,
+    content: contentSchema,
     clientMessageId: uuidSchema.optional(),
-    attachmentIds: attachmentIdsSchema,
+    mentions: z.array(uuidSchema).max(20).optional(),
   })
-  .strict()
-  .refine((body) => body.content.length > 0 || (body.attachmentIds?.length ?? 0) > 0, {
-    message: 'Message needs content or at least one attachment',
-    path: ['content'],
-  });
+  .strict();
 
 export const editMessageSchema = z.object({ content: contentSchema }).strict();
 

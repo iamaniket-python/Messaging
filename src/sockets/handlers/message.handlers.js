@@ -3,6 +3,7 @@ import { sendMessageEventSchema } from '../validation.js';
 import { broadcastNewMessage } from '../realtime.js';
 import * as messagesService from '../../modules/messages/messages.service.js';
 import { toMessage } from '../../modules/messages/message.mapper.js';
+import { enqueueMessageNotifications } from '../../modules/notifications/notifications.queue.js';
 import { consumeRateLimit } from '../../utils/rateLimit.js';
 import { AppError } from '../../utils/AppError.js';
 import { env } from '../../config/env.js';
@@ -10,7 +11,7 @@ import { env } from '../../config/env.js';
 export function registerMessageHandlers(socket) {
   registerEvent(socket, 'message:send', {
     schema: sendMessageEventSchema,
-    handler: async (sock, { conversationId, clientMessageId, content, attachmentIds }) => {
+    handler: async (sock, { conversationId, clientMessageId, content, mentions }) => {
       const userId = sock.data.user.id;
 
       const rate = await consumeRateLimit(`socket-messages:${userId}`, {
@@ -26,11 +27,12 @@ export function registerMessageHandlers(socket) {
         userId,
         content,
         clientMessageId,
-        attachmentIds,
+        mentions,
       });
 
       if (!duplicate) {
         broadcastNewMessage(message, { exceptSocketId: sock.id });
+        enqueueMessageNotifications(message);
       }
 
       return { message: toMessage(message), duplicate };

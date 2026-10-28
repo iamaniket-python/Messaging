@@ -4,6 +4,9 @@ import usersRoutes from './modules/users/users.routes.js';
 import conversationsRoutes from './modules/conversations/conversations.routes.js';
 import messageRoutes, { conversationMessagesRouter } from './modules/messages/messages.routes.js';
 import searchRoutes from './modules/search/search.routes.js';
+import notificationsRoutes, {
+  preferencesRouter as notificationPreferencesRouter,
+} from './modules/notifications/notifications.routes.js';
 
 const router = Router();
 
@@ -12,10 +15,12 @@ router.get('/', (_req, res) => {
 });
 
 router.use('/auth', authRoutes);
+router.use('/users/me/notification-preferences', notificationPreferencesRouter);
 router.use('/users', usersRoutes);
 router.use('/conversations/:conversationId/messages', conversationMessagesRouter);
 router.use('/conversations', conversationsRoutes);
 router.use('/messages', messageRoutes);
 router.use('/search', searchRoutes);
+router.use('/notifications', notificationsRoutes);
 
 export default router;

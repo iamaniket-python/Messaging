@@ -1,6 +1,7 @@
 import request from 'supertest';
 import app from '../src/app.js';
 import { pool } from '../src/config/db.js';
+import { flushNotificationJobs } from '../src/modules/notifications/notifications.queue.js';
 
 export const hasTestDb = Boolean(process.env.TEST_DATABASE_URL);
 export const api = (path) => `/api/v1${path}`;
@@ -14,15 +15,19 @@ function assertTestEnv() {
 
 export async function resetDb() {
   assertTestEnv();
+  await flushNotificationJobs();
   await pool.query(
-    'TRUNCATE users, sessions, conversations, conversation_members, messages, attachments RESTART IDENTITY CASCADE'
+    `TRUNCATE users, sessions, conversations, conversation_members, messages,
+              notifications, notification_preferences RESTART IDENTITY CASCADE`
   );
 }
 
 export async function resetChatData() {
   assertTestEnv();
+  await flushNotificationJobs();
   await pool.query(
-    'TRUNCATE conversations, conversation_members, messages, attachments RESTART IDENTITY CASCADE'
+    `TRUNCATE conversations, conversation_members, messages,
+              notifications, notification_preferences RESTART IDENTITY CASCADE`
   );
 }
 

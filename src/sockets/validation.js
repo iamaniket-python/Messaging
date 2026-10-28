@@ -5,14 +5,10 @@ export const sendMessageEventSchema = z
   .object({
     conversationId: uuidSchema,
     clientMessageId: uuidSchema,
-    content: z.string().trim().max(4000).default(''),
-    attachmentIds: z.array(uuidSchema).max(5).optional(),
+    content: z.string().trim().min(1).max(4000),
+    mentions: z.array(uuidSchema).max(20).optional(),
   })
-  .strict()
-  .refine((body) => body.content.length > 0 || (body.attachmentIds?.length ?? 0) > 0, {
-    message: 'Message needs content or at least one attachment',
-    path: ['content'],
-  });
+  .strict();
 
 export const conversationEventSchema = z.object({ conversationId: uuidSchema }).strict();
 

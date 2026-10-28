@@ -1,6 +1,7 @@
 import * as service from './messages.service.js';
 import { toMessage } from './message.mapper.js';
 import { broadcastNewMessage, emitToConversation } from '../../sockets/realtime.js';
+import { enqueueMessageNotifications } from '../notifications/notifications.queue.js';
 
 export async function list(req, res) {
   const { conversationId } = req.validated.params;
@@ -29,10 +30,13 @@ export async function send(req, res) {
     userId: req.user.id,
     content: req.validated.body.content,
     clientMessageId: req.validated.body.clientMessageId,
-    attachmentIds: req.validated.body.attachmentIds,
+    mentions: req.validated.body.mentions,
   });
 
-  if (!duplicate) broadcastNewMessage(message);
+  if (!duplicate) {
+    broadcastNewMessage(message);
+    enqueueMessageNotifications(message);
+  }
 
   res.status(duplicate ? 200 : 201).json({ success: true, data: { message: toMessage(message) } });
 }

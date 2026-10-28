@@ -6,6 +6,10 @@ import { checkDb, closeDb } from './config/db.js';
 import { closeRedis } from './config/redis.js';
 import { initSocket } from './sockets/index.js';
 import { stopPresenceTasks } from './sockets/presence/presence.service.js';
+import {
+  startNotificationWorker,
+  closeNotificationQueue,
+} from './modules/notifications/notifications.queue.js';
 
 const server = http.createServer(app);
 const io = initSocket(server);
@@ -26,6 +30,7 @@ async function shutdown(signal, exitCode = 0) {
   io.close(async () => {
     try {
       stopPresenceTasks();
+      await closeNotificationQueue();
       await closeRedis();
       await closeDb();
       logger.info('Shutdown complete');
@@ -41,6 +46,7 @@ async function shutdown(signal, exitCode = 0) {
 async function start() {
   try {
     await checkDb();
+    startNotificationWorker();
     server.listen(env.PORT, () => {
       logger.info(`Server running on port ${env.PORT} (${env.NODE_ENV})`);
     });
