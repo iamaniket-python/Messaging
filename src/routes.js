@@ -3,7 +3,7 @@ import authRoutes from './modules/auth/auth.routes.js';
 import usersRoutes from './modules/users/users.routes.js';
 import conversationsRoutes from './modules/conversations/conversations.routes.js';
 import messageRoutes, { conversationMessagesRouter } from './modules/messages/messages.routes.js';
-import attachmentsRoutes from './modules/attachments/attachments.routes.js';
+import searchRoutes from './modules/search/search.routes.js';
 
 const router = Router();
 
@@ -16,6 +16,6 @@ router.use('/users', usersRoutes);
 router.use('/conversations/:conversationId/messages', conversationMessagesRouter);
 router.use('/conversations', conversationsRoutes);
 router.use('/messages', messageRoutes);
-router.use('/attachments', attachmentsRoutes);
+router.use('/search', searchRoutes);
 
 export default router;
