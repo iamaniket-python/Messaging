@@ -10,7 +10,7 @@ import { env } from '../../config/env.js';
 export function registerMessageHandlers(socket) {
   registerEvent(socket, 'message:send', {
     schema: sendMessageEventSchema,
-    handler: async (sock, { conversationId, clientMessageId, content }) => {
+    handler: async (sock, { conversationId, clientMessageId, content, attachmentIds }) => {
       const userId = sock.data.user.id;
 
       const rate = await consumeRateLimit(`socket-messages:${userId}`, {
@@ -26,6 +26,7 @@ export function registerMessageHandlers(socket) {
         userId,
         content,
         clientMessageId,
+        attachmentIds,
       });
 
       if (!duplicate) {

@@ -29,6 +29,7 @@ export async function send(req, res) {
     userId: req.user.id,
     content: req.validated.body.content,
     clientMessageId: req.validated.body.clientMessageId,
+    attachmentIds: req.validated.body.attachmentIds,
   });
 
   if (!duplicate) broadcastNewMessage(message);

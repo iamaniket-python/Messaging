@@ -15,13 +15,15 @@ function assertTestEnv() {
 export async function resetDb() {
   assertTestEnv();
   await pool.query(
-    'TRUNCATE users, sessions, conversations, conversation_members, messages RESTART IDENTITY CASCADE'
+    'TRUNCATE users, sessions, conversations, conversation_members, messages, attachments RESTART IDENTITY CASCADE'
   );
 }
 
 export async function resetChatData() {
   assertTestEnv();
-  await pool.query('TRUNCATE conversations, conversation_members, messages RESTART IDENTITY CASCADE');
+  await pool.query(
+    'TRUNCATE conversations, conversation_members, messages, attachments RESTART IDENTITY CASCADE'
+  );
 }
 
 let counter = 0;

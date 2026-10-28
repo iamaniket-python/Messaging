@@ -1,6 +1,11 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
+const optionalString = z
+  .string()
+  .optional()
+  .transform((value) => (value && value.trim() ? value.trim() : undefined));
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(5000),
@@ -39,6 +44,19 @@ const envSchema = z.object({
   PRESENCE_HEARTBEAT_MS: z.coerce.number().int().positive().default(20000),
   PRESENCE_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(30000),
   SOCKET_MESSAGE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(120),
+
+  // File storage (S3-compatible, optional: missing config => 503 STORAGE_NOT_CONFIGURED)
+  S3_ENDPOINT: optionalString,
+  S3_REGION: z.string().trim().min(1).default('us-east-1'),
+  S3_BUCKET: optionalString,
+  S3_ACCESS_KEY_ID: optionalString,
+  S3_SECRET_ACCESS_KEY: optionalString,
+  S3_FORCE_PATH_STYLE: z
+    .string()
+    .optional()
+    .transform((value) => value?.trim().toLowerCase() === 'true'),
+  UPLOAD_MAX_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
+  UPLOAD_URL_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
 });
 
 const parsed = envSchema.safeParse(process.env);
