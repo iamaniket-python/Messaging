@@ -1,5 +1,6 @@
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../utils/logger.js';
+import { containsNullByte } from '../utils/sanitize.js';
 
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 
@@ -29,6 +30,10 @@ export function registerEvent(socket, event, { schema, handler, requireFreshToke
 
       if (rateLimited && !socket.data.bucket.consume()) {
         throw new AppError(429, 'RATE_LIMITED', 'Too many events, slow down');
+      }
+
+      if (containsNullByte(payload)) {
+        throw new AppError(400, 'INVALID_INPUT', 'Payload contains invalid characters');
       }
 
       let data = payload;

@@ -6,11 +6,9 @@ export function notFoundHandler(req, _res, next) {
   next(AppError.notFound(`Route ${req.method} ${req.originalUrl} not found`, 'ROUTE_NOT_FOUND'));
 }
 
-// Alag-alag library errors ko ek standard AppError mein convert karta hai
 function normalizeError(err) {
   if (err instanceof AppError) return err;
 
-  // express.json() errors
   if (err.type === 'entity.parse.failed') {
     return new AppError(400, 'INVALID_JSON', 'Malformed JSON in request body');
   }
@@ -18,12 +16,14 @@ function normalizeError(err) {
     return new AppError(413, 'PAYLOAD_TOO_LARGE', 'Request body is too large');
   }
 
-  // PostgreSQL errors
   if (err.code === '23505') {
-    return new AppError(409, 'CONFLICT', 'Resource already exists'); // unique violation
+    return new AppError(409, 'CONFLICT', 'Resource already exists');
   }
-  if (err.code === '22P02') {
-    return new AppError(400, 'INVALID_INPUT', 'Invalid input format'); // e.g. bad UUID
+  if (err.code === '22P02' || err.code === '22021' || err.code === '22P05') {
+    return new AppError(400, 'INVALID_INPUT', 'Invalid input format');
+  }
+  if (err.code === '57014') {
+    return new AppError(503, 'DB_TIMEOUT', 'Database took too long to respond');
   }
 
   return new AppError(500, 'INTERNAL_ERROR', 'Something went wrong');

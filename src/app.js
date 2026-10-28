@@ -1,21 +1,23 @@
 import { randomUUID } from 'node:crypto';
-import express from 'express';
+import express, { Router } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import pinoHttp from 'pino-http';
+import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
 import { AppError } from './utils/AppError.js';
 import healthRoutes from './modules/health/health.routes.js';
 import apiRoutes from './routes.js';
+import { openApiDocument } from './docs/openapi.js';
 import { notFoundHandler, errorHandler } from './middlewares/errorHandler.js';
+import { requestTimeout } from './middlewares/requestTimeout.js';
+import { rejectNullBytes } from './middlewares/rejectNullBytes.js';
 
 const app = express();
 
-// Load balancer ke peeche real client IP ke liye (rate limiting mein kaam aayega)
 app.set('trust proxy', env.TRUST_PROXY);
 
-// 1. Request ID + structured logging
 app.use(
   pinoHttp({
     logger,
@@ -34,10 +36,47 @@ app.use(
   })
 );
 
-// 2. Security headers
-app.use(helmet());
+// Swagger UI ko inline styles chahiye, isliye sirf /api/docs par relaxed CSP.
+// API ke baaki routes par strict CSP (neeche) hi lagti hai.
+const docsRouter = Router();
+docsRouter.use((req, res, next) => {
+  if (req.originalUrl.split('?')[0] === '/api/docs') return res.redirect(302, '/api/docs/');
+  next();
+});
+docsRouter.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'"],
+        frameAncestors: ["'none'"],
+        upgradeInsecureRequests: null,
+      },
+    },
+    referrerPolicy: { policy: 'no-referrer' },
+    hsts: false,
+  })
+);
+docsRouter.get('/openapi.json', (_req, res) => res.json(openApiDocument));
+docsRouter.use('/', swaggerUi.serve, swaggerUi.setup(openApiDocument, { customSiteTitle: 'Chat Platform API' }));
+app.use('/api/docs', docsRouter);
 
-// 3. CORS allow-list (Postman/curl jaise no-origin requests allowed)
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },
+    },
+    referrerPolicy: { policy: 'no-referrer' },
+    hsts:
+      env.NODE_ENV === 'production'
+        ? { maxAge: 15_552_000, includeSubDomains: true }
+        : false,
+  })
+);
+
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -45,17 +84,20 @@ app.use(
       return callback(new AppError(403, 'CORS_ORIGIN_DENIED', 'Origin not allowed'));
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+    exposedHeaders: ['X-Request-Id'],
+    maxAge: 600,
   })
 );
 
-// 4. Body parsing (size limit se malicious bade payloads rukte hain)
+app.use(requestTimeout());
 app.use(express.json({ limit: '100kb' }));
+app.use(rejectNullBytes);
 
-// 5. Routes
 app.use(healthRoutes);
 app.use('/api/v1', apiRoutes);
 
-// 6. 404 + central error handler (hamesha sabse last mein)
 app.use(notFoundHandler);
 app.use(errorHandler);
 

@@ -12,6 +12,12 @@ import {
 } from './modules/notifications/notifications.queue.js';
 
 const server = http.createServer(app);
+
+// Load balancer (Render/Railway) ke idle timeout se zyada keep-alive, warna random 502 aate hain.
+server.keepAliveTimeout = env.SERVER_KEEP_ALIVE_MS;
+server.headersTimeout = env.SERVER_KEEP_ALIVE_MS + 1000;
+server.requestTimeout = Math.max(env.REQUEST_TIMEOUT_MS, env.SERVER_KEEP_ALIVE_MS + 2000);
+
 const io = initSocket(server);
 
 let shuttingDown = false;

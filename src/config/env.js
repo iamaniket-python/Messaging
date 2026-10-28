@@ -17,8 +17,15 @@ const envSchema = z.object({
         .split(',')
         .map((origin) => origin.trim())
         .filter(Boolean)
-    ),
+    )
+    .refine((origins) => !origins.includes('*'), {
+      message: 'CORS_ORIGINS must list explicit origins (wildcard "*" is not allowed with credentials)',
+    }),
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+
+  // HTTP hardening
+  REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).default(30000),
+  SERVER_KEEP_ALIVE_MS: z.coerce.number().int().min(1000).default(65000),
 
   // Auth
   JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET must be at least 32 characters'),

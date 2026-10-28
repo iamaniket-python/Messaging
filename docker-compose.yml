@@ -21,7 +21,8 @@ services:
     image: redis:7-alpine
     container_name: chat_redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    # noeviction: BullMQ ke liye zaroori (jobs evict nahi hone chahiye)
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     ports:
       - "6379:6379"
     volumes:
@@ -32,6 +33,67 @@ services:
       timeout: 3s
       retries: 10
 
+  minio:
+    image: minio/minio:latest
+    container_name: chat_minio
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin123 &&
+      mc mb --ignore-existing local/chat-uploads &&
+      echo bucket-ready
+      "
+
+  app:
+    build: .
+    container_name: chat_app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    ports:
+      - "5000:5000"
+    environment:
+      NODE_ENV: production
+      PORT: "5000"
+      LOG_LEVEL: info
+      DATABASE_URL: postgresql://chat:chat_password@postgres:5432/chat_db
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET .env mein set karo (min 32 chars)}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: chat-uploads
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin123
+      S3_FORCE_PATH_STYLE: "true"
+    command: ["sh", "-c", "npm run migrate && node src/server.js"]
+
 volumes:
   pgdata:
   redisdata:
+  miniodata:
